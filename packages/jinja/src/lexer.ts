@@ -140,7 +140,12 @@ function preprocess(template: string, options: PreprocessOptions = {}): string {
 
 	// Handle the custom transformers-specific `generation` tag.
 	// See https://github.com/huggingface/transformers/pull/30650 for more information.
-	return template.replace(/{%\s*(end)?generation\s*%}/gs, "");
+	// Also honors `{%-` / `-%}` whitespace-stripping modifiers by trimming
+	// surrounding whitespace before removing the tag.
+	return template.replace(
+		/(\s*){%(-?)\s*(?:end)?generation\s*(-?)%}(\s*)/gs,
+		(_, before, lstrip, rstrip, after) => (lstrip ? "" : before) + (rstrip ? "" : after),
+	);
 }
 
 /**
@@ -161,7 +166,9 @@ export function tokenize(source: string, options: PreprocessOptions = {}): Token
 				// Consume the backslash
 				++cursorPosition;
 				// Check for end of input
-				if (cursorPosition >= src.length) throw new SyntaxError("Unexpected end of input");
+				if (cursorPosition >= src.length) {
+					throw new SyntaxError("Unexpected end of input");
+				}
 
 				// Add the escaped character
 				const escaped = src[cursorPosition++];
@@ -174,7 +181,9 @@ export function tokenize(source: string, options: PreprocessOptions = {}): Token
 			}
 
 			str += src[cursorPosition++];
-			if (cursorPosition >= src.length) throw new SyntaxError("Unexpected end of input");
+			if (cursorPosition >= src.length) {
+				throw new SyntaxError("Unexpected end of input");
+			}
 		}
 		return str;
 	};
@@ -372,7 +381,11 @@ export function tokenize(source: string, options: PreprocessOptions = {}): Token
 			// Consume integer part
 			let num = consumeWhile(isInteger);
 			// Possibly, consume fractional part
-			if (src[cursorPosition] === "." && isInteger(src[cursorPosition + 1])) {
+			if (
+				tokens.at(-1)?.type !== TOKEN_TYPES.Dot &&
+				src[cursorPosition] === "." &&
+				isInteger(src[cursorPosition + 1])
+			) {
 				++cursorPosition; // consume '.'
 				const frac = consumeWhile(isInteger);
 				num = `${num}.${frac}`;
